@@ -189,20 +189,16 @@ end
 -- ──────────────── MAP HACK — NO ICON ───────────
 
 local function map()
-    loading("map hack no icon")
     gg.setRanges(gg.REGION_ANONYMOUS)
     gg.clearResults()
-    gg.searchNumber(
-        "98,784,247,822;47,244,640,279;4,510,805,388,492,275,723;:9",
-        gg.TYPE_QWORD
-    )
+    gg.searchNumber("98,784,247,822;47,244,640,279;4,510,805,388,492,275,723;:9", gg.TYPE_QWORD)
     gg.refineNumber("98,784,247,822", gg.TYPE_QWORD)
     local results = gg.getResults(9999)
     if #results > 0 then
         gg.editAll("98,784,247,823", gg.TYPE_QWORD)
     end
     gg.clearResults()
-    done("ᴍᴀᴘ ʜᴀᴄᴋ ɴᴏ ɪᴄᴏɴ ᴀᴄᴛɪᴠᴀᴛᴇᴅ")
+    gg.toast("MapHack No Icon On")
 end
 
 -- ──────────────── MAP HACK — ICON ──────────────
