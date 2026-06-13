@@ -1,7 +1,7 @@
 local SCRIPT_NAME    = "ᴍɪɴɪᴍᴀʟ"
 local SCRIPT_VERSION = "v1.0"
 local LINE           = "━"
-local STATUS_URL     = "https://pastebin.com/raw/n2NQ8MiW"
+local STATUS_URL     = "https://raw.githubusercontent.com/Begie-dot/Null/refs/heads/main/NULL%20SCRIPT/NULL%20ADMIN%20PANEL"
 
 -- ──────────────── SYSTEM ───────────────
 local function checkStatus()
