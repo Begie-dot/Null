@@ -1,9 +1,24 @@
 local SCRIPT_NAME    = "ᴍɪɴɪᴍᴀʟ"
 local SCRIPT_VERSION = "v1.0"
 local LINE           = "━"
-local STATUS_URL     = "https://pastebin.com/raw/n2NQ8MiW"
 
--- ──────────────── SYSTEM ───────────────
+-- ──────────────────────────────────────────────
+--  URLs  (set up your own Pastebins)
+-- ──────────────────────────────────────────────
+local STATUS_URL  = "https://pastebin.com/raw/4x9hxN4F"
+local EXPIRE_URL  = "https://pastebin.com/raw/rse9nHUL"
+--  ↑ Create a raw Pastebin and put only the expiry date inside, e.g.:  2025-12-31
+--  ↑ Replace XXXXXXXX with your real Pastebin raw ID
+
+-- ──────────────────────────────────────────────
+--  PASSWORDS  ← change before distributing
+-- ──────────────────────────────────────────────
+local VIP_PASSWORD   = "test"      -- ⚠ change this
+local ADMIN_PASSWORD = "Begie"   -- ⚠ change this
+local USER_ROLE      = nil            -- filled at runtime: "vip" or "admin"
+
+-- ──────────────── SYSTEM ───────────────────────
+
 local function checkStatus()
     local ok, result = pcall(function()
         return gg.makeRequest(STATUS_URL)
@@ -19,18 +34,139 @@ local function checkStatus()
     end
 end
 
+-- ──────────────── ONLINE TIME (anti date-spoof) ─
+
+local function getOnlineTimestamp()
+    -- Fetches real server time from Cloudflare edge.
+    -- Changing the device clock has NO effect on this value.
+    local ok, result = pcall(function()
+        return gg.makeRequest("https://1.1.1.1/cdn-cgi/trace")
+    end)
+    if not ok or type(result) ~= "table" or not result.content then
+        return nil
+    end
+    local ts = result.content:match("ts=(%d+%.?%d*)")
+    return ts and math.floor(tonumber(ts)) or nil
+end
+
+local function dateToUnix(dateStr)
+    -- Converts "YYYY-MM-DD" → Unix timestamp (start of next day, so full expiry day is usable)
+    local y, m, d = dateStr:match("(%d%d%d%d)-(%d%d)-(%d%d)")
+    if not y then return nil end
+    y, m, d = tonumber(y), tonumber(m), tonumber(d)
+    local dim = {31,28,31,30,31,30,31,31,30,31,30,31}
+    if (y%4==0 and y%100~=0) or (y%400==0) then dim[2]=29 end
+    local days = 0
+    for yr = 1970, y-1 do
+        days = days + (((yr%4==0 and yr%100~=0) or (yr%400==0)) and 366 or 365)
+    end
+    for mo = 1, m-1 do days = days + dim[mo] end
+    days = days + d          -- include the full expiry day itself
+    return days * 86400
+end
+
+-- ──────────────── EXPIRY CHECK ─────────────────
+
+local function checkExpiry()
+    gg.toast("•  verifying expiry date...")
+
+    local ok, res = pcall(function()
+        return gg.makeRequest(EXPIRE_URL)
+    end)
+    if not ok or type(res) ~= "table" or not res.content then
+        gg.alert("✕  Cannot reach expiry server.\nCheck your internet connection.")
+        os.exit()
+    end
+
+    local expireDate = res.content:match("^%s*(.-)%s*$")
+    local expireTs   = dateToUnix(expireDate)
+    if not expireTs then
+        gg.alert("✕  Invalid expiry data.\nContact admin.")
+        os.exit()
+    end
+
+    local onlineTs = getOnlineTimestamp()
+    if not onlineTs then
+        -- If we can't reach the time server we refuse to run.
+        -- This prevents offline bypass via device clock tricks.
+        gg.alert(
+            "✕  Cannot verify online time.\n\n" ..
+            "Make sure you are connected\n" ..
+            "to the internet and try again."
+        )
+        os.exit()
+    end
+
+    if onlineTs >= expireTs then
+        gg.alert(
+            "⛔  SCRIPT EXPIRED\n" ..
+            "━━━━━━━━━━━━━━━━━━━━━\n\n" ..
+            "Expired on  :  " .. expireDate .. "\n\n" ..
+            "Contact admin to renew access."
+        )
+        os.exit()
+    end
+
+    local daysLeft = math.floor((expireTs - onlineTs) / 86400)
+    gg.toast("✓  Valid — expires in " .. daysLeft .. " day(s)")
+    gg.sleep(700)
+end
+
+-- ──────────────── PASSWORD CHECK ───────────────
+
+local function checkPassword()
+    local MAX_ATTEMPTS = 3
+    for attempt = 1, MAX_ATTEMPTS do
+        local input = gg.prompt(
+            {"🔐  Enter Password:"},
+            {""},
+            {"text"}
+        )
+        if input == nil then
+            gg.toast("✕  Cancelled. Exiting.")
+            os.exit()
+        end
+        local pass = tostring(input[1] or "")
+        if pass == ADMIN_PASSWORD then
+            USER_ROLE = "admin"
+            gg.toast("✓  Welcome, Admin!")
+            gg.sleep(500)
+            return
+        elseif pass == VIP_PASSWORD then
+            USER_ROLE = "vip"
+            gg.toast("✓  Welcome, VIP User!")
+            gg.sleep(500)
+            return
+        else
+            local left = MAX_ATTEMPTS - attempt
+            if left > 0 then
+                gg.alert(
+                    "✕  Wrong password!\n" ..
+                    tostring(left) .. " attempt(s) remaining."
+                )
+            else
+                gg.alert("⛔  Too many failed attempts.\nAccess denied.")
+                os.exit()
+            end
+        end
+    end
+end
+
+-- ──────────────── SECURITY BYPASS ──────────────
+
 function SECURITY_CHECK()
     gg.setVisible(false)
     gg.toast("⌗  initializing bypass...")
-    gg.sleep(800)
+    gg.sleep(1000)
     gg.clearResults()
     gg.clearList()
     gg.setRanges(gg.REGION_ANONYMOUS | gg.REGION_C_BSS)
-    gg.sleep(500)
+    gg.sleep(800)
     gg.toast("✓  bypass activated")
 end
 
--- ──────────────── UTILS ────────────────
+-- ──────────────── UTILS ────────────────────────
+
 local function loading(label)
     gg.toast("•  loading " .. label .. "...")
     gg.sleep(300)
@@ -41,12 +177,19 @@ local function done(label)
 end
 
 local function header()
-    return SCRIPT_NAME .. "  " .. SCRIPT_VERSION .. "\n" .. LINE
+    local tag = ""
+    if USER_ROLE == "admin" then
+        tag = "  [ADMIN]"
+    elseif USER_ROLE == "vip" then
+        tag = "  [VIP]"
+    end
+    return SCRIPT_NAME .. "  " .. SCRIPT_VERSION .. tag .. "\n" .. LINE
 end
 
--- ──────────────── FEATURES ─────────────
+-- ──────────────── MAP HACK — NO ICON ───────────
+
 local function map()
-    loading("map hack")
+    loading("map hack no icon")
     gg.setRanges(gg.REGION_ANONYMOUS)
     gg.clearResults()
     gg.searchNumber(
@@ -59,8 +202,81 @@ local function map()
         gg.editAll("98,784,247,823", gg.TYPE_QWORD)
     end
     gg.clearResults()
-    done("ᴍᴀᴘ ʜᴀᴄᴋ ᴀᴄᴛɪᴠᴀᴛᴇᴅ")
+    done("ᴍᴀᴘ ʜᴀᴄᴋ ɴᴏ ɪᴄᴏɴ ᴀᴄᴛɪᴠᴀᴛᴇᴅ")
 end
+
+-- ──────────────── MAP HACK — ICON ──────────────
+-- ⚠ Replace the section below with your Map Hack Icon code when ready.
+-- The risky warning before this function is already handled by the menu.
+
+local function mapIcon()
+    loading("map hack icon")
+
+    local maphack  = 0x2D444CC
+    local hexTrue  = "D6 5F 03 C0 D2 80 00 20h"
+
+    local libTarget = gg.getRangesList("libcsharp.so")
+    for _, name in ipairs(libTarget) do
+        if name.state == "Cd" then
+            gg.setValues({{
+                address = name.start + maphack,
+                flags   = gg.TYPE_QWORD,
+                value   = hexTrue,
+            }})
+            break
+        end
+    end
+
+    done("ᴍᴀᴘ ʜᴀᴄᴋ ɪᴄᴏɴ ᴀᴄᴛɪᴠᴀᴛᴇᴅ")
+end
+
+-- ──────────────── MAP HACK SUB-MENU ────────────
+
+local function mapHackMenu()
+    while true do
+        local sub = gg.choice(
+            {
+                "◌  ᴍᴀᴘʜᴀᴄᴋ ɴᴏ ɪᴄᴏɴ",
+                "◌  ᴍᴀᴘʜᴀᴄᴋ ɪᴄᴏɴ  ⚠️",
+                "◂  ʙᴀᴄᴋ",
+            },
+            nil,
+            header() .. "\n◈ ᴍᴀᴘ ʜᴀᴄᴋ"
+        )
+
+        if sub == nil or sub == 3 then
+            return
+
+        elseif sub == 1 then
+            map()
+            return
+
+        elseif sub == 2 then
+            -- ── RISKY ALERT ──────────────────────────
+            local confirm = gg.choice(
+                {
+                    "✓  I understand the risk, proceed",
+                    "✕  Cancel, go back",
+                },
+                nil,
+                "⚠️  RISKY ALERT\n" ..
+                "━━━━━━━━━━━━━━━━━━━━━\n\n" ..
+                "Map Hack ICON is HIGH RISK!\n\n" ..
+                "• May trigger anti-cheat detection\n" ..
+                "• Higher chance of account ban\n" ..
+                "• Use at your own risk only\n\n" ..
+                "Do you still want to proceed?"
+            )
+            if confirm == 1 then
+                mapIcon()
+                return
+            end
+            -- if cancel, loop back to sub-menu
+        end
+    end
+end
+
+-- ──────────────── DRONE 4X ─────────────────────
 
 local function DRONE_4X()
     loading("drone 4x")
@@ -90,7 +306,8 @@ local function DRONE_4X()
     done("ᴅʀᴏɴᴇ 4x ᴀᴄᴛɪᴠᴀᴛᴇᴅ")
 end
 
--- ──────────────── ROOM INFO ────────────
+-- ──────────────── ROOM INFO ────────────────────
+
 local RD_FUNC_OFFSET    = 0x584DDC
 local RD_STATIC_OBJ_OFF = 0x988
 local RD_MID_OFF        = 0xB8
@@ -474,6 +691,8 @@ local function roomInfo()
     done("ʀᴏᴏᴍ ɪɴꜰᴏ ʟᴏᴀᴅᴇᴅ")
 end
 
+-- ──────────────── LARGE HP ─────────────────────
+
 local largeHP_revert = nil
 
 local function largeHP()
@@ -484,7 +703,6 @@ local function largeHP()
         gg.searchNumber("1.0F;0.85000002384F", gg.TYPE_FLOAT, false, gg.SIGN_EQUAL, 0, -1, 0)
         gg.refineNumber("1", gg.TYPE_FLOAT, false, gg.SIGN_EQUAL, 0, -1, 0)
         largeHP_revert = gg.getResults(5000, nil, nil, nil, nil, nil, nil, nil, nil)
-        -- save original values before editing
         for _, v in ipairs(largeHP_revert) do
             v.value = "1"
         end
@@ -508,14 +726,18 @@ local function largeHP()
     end
 end
 
--- ──────────────── STARTUP ──────────────
+-- ──────────────── STARTUP ──────────────────────
+
 gg.toast("•  checking status...")
 checkStatus()
+checkExpiry()        -- ← online expiry check (Cloudflare time, device clock-proof)
+checkPassword()      -- ← VIP / Admin password gate
 SECURITY_CHECK()
 gg.toast("✓  welcome")
 gg.sleep(400)
 
--- ──────────────── INTERFACE ────────────
+-- ──────────────── INTERFACE ────────────────────
+
 local MENU = {
     "◌  ᴍᴀᴘ ʜᴀᴄᴋ",
     "◌  ᴅʀᴏɴᴇ 4x",
@@ -526,11 +748,11 @@ local MENU = {
 
 local function SHOW_MENU()
     local choice = gg.choice(MENU, nil, header())
-    
+
     if choice == nil then
-        -- User closed or minimized the menu window without making a selection
+        -- closed / minimized
     elseif choice == 1 then
-        map()
+        mapHackMenu()   -- ← opens sub-menu: No Icon / Icon
     elseif choice == 2 then
         DRONE_4X()
     elseif choice == 3 then
@@ -543,11 +765,12 @@ local function SHOW_MENU()
     end
 end
 
--- ──────────────── LOOP WINDOW ──────────
+-- ──────────────── LOOP WINDOW ──────────────────
+
 while true do
     if gg.isVisible(true) then
         gg.setVisible(false)
         SHOW_MENU()
     end
-    gg.sleep(100) -- Prevents high CPU usage while waiting for interactions
+    gg.sleep(100)
 end
