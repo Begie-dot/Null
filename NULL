@@ -13,8 +13,8 @@ local EXPIRE_URL  = "https://pastebin.com/raw/rse9nHUL"
 -- ──────────────────────────────────────────────
 --  PASSWORDS  ← change before distributing
 -- ──────────────────────────────────────────────
-local VIP_PASSWORD   = "test"      -- ⚠ change this
-local ADMIN_PASSWORD = "Begie"   -- ⚠ change this
+local VIP_PASSWORD   = "vip2024"      -- ⚠ change this
+local ADMIN_PASSWORD = "admin@9999"   -- ⚠ change this
 local USER_ROLE      = nil            -- filled at runtime: "vip" or "admin"
 
 -- ──────────────── SYSTEM ───────────────────────
@@ -157,11 +157,11 @@ end
 function SECURITY_CHECK()
     gg.setVisible(false)
     gg.toast("⌗  initializing bypass...")
-    gg.sleep(1000)
+    gg.sleep(800)
     gg.clearResults()
     gg.clearList()
     gg.setRanges(gg.REGION_ANONYMOUS | gg.REGION_C_BSS)
-    gg.sleep(800)
+    gg.sleep(500)
     gg.toast("✓  bypass activated")
 end
 
